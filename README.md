@@ -2,7 +2,8 @@
 
 A modern, browser-based WYSIWYG editor for creating and editing Sankey diagrams. Built as a single HTML file with no external dependencies (except Google Fonts and Material Icons).
 
-![Sankey Diagram Editor Screenshot](screenshot.png)
+<img width="1875" height="799" alt="image" src="https://github.com/user-attachments/assets/50f0c202-7e67-48b7-bf17-eb0393a3029a" />
+
 
 ## Features
 
@@ -128,6 +129,5 @@ MIT License - feel free to use, modify, and distribute.
 
 ## Acknowledgments
 
-- Inspired by [SankeyMatic](https://sankeymatic.com/) and Google Charts Sankey
 - Uses [Inter](https://fonts.google.com/specimen/Inter) typeface
 - Icons from [Material Icons](https://fonts.google.com/icons)
