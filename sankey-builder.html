@@ -630,7 +630,9 @@
             box-shadow: var(--shadow-medium);
             z-index: 1000;
             display: none;
-            width: 260px;
+            width: 280px;
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
         .flow-popup.active {
@@ -704,26 +706,9 @@
         }
 
         .flow-popup-colors {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-        }
-
-        .flow-popup-color {
-            width: 24px;
-            height: 24px;
-            border-radius: 3px;
-            cursor: pointer;
-            border: 2px solid transparent;
-            transition: transform 0.15s;
-        }
-
-        .flow-popup-color:hover {
-            transform: scale(1.15);
-        }
-
-        .flow-popup-color.selected {
-            border-color: var(--color-night);
+            flex: 1;
+            max-height: 280px;
+            overflow-y: auto;
         }
 
         .flow-popup-footer {
@@ -1272,10 +1257,10 @@
                 <span class="flow-popup-label">Value</span>
                 <input type="number" class="flow-popup-input" id="flow-popup-value" min="1" style="width: 80px; flex: none;">
             </div>
-            <div class="flow-popup-row" style="align-items: flex-start;">
-                <span class="flow-popup-label" style="padding-top: 4px;">Color</span>
-                <div class="flow-popup-colors" id="flow-popup-colors"></div>
+            <div class="flow-popup-row">
+                <span class="flow-popup-label">Color</span>
             </div>
+            <div class="flow-popup-colors" id="flow-popup-colors"></div>
         </div>
         <div class="flow-popup-footer">
             <span class="flow-popup-delete" onclick="deleteSelectedFlow()">
@@ -2246,20 +2231,44 @@
             document.getElementById('flow-popup-title').textContent = `${flow.source} → ${flow.target}`;
             document.getElementById('flow-popup-value').value = flow.value;
             
-            // Render quick color palette
+            // Render full color palette
             const colorsDiv = document.getElementById('flow-popup-colors');
-            colorsDiv.innerHTML = defaultFlowColors.concat(['#364064', '#7C9CBF', '#000000']).map(color => {
-                const isSelected = color.toUpperCase() === flow.color.toUpperCase();
-                return `<div class="flow-popup-color${isSelected ? ' selected' : ''}" 
-                    style="background: ${color}" 
-                    data-color="${color}"
-                    onclick="selectFlowPopupColor('${color}')"></div>`;
-            }).join('');
+            colorsDiv.innerHTML = generateColorPickerHTML(flow.color, true);
+            colorsDiv.querySelectorAll('.color-swatch').forEach(swatch => {
+                swatch.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectFlowPopupColor(swatch.dataset.color);
+                    // Update visual selection
+                    colorsDiv.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+                    swatch.classList.add('selected');
+                });
+            });
             
-            // Position popup near click
+            // Show popup first to measure it
+            popup.style.visibility = 'hidden';
+            popup.classList.add('active');
+            
+            // Position popup ensuring it stays within viewport
             if (event) {
-                const x = Math.min(event.clientX, window.innerWidth - 280);
-                const y = Math.min(event.clientY, window.innerHeight - 250);
+                const popupRect = popup.getBoundingClientRect();
+                const popupWidth = popupRect.width || 280;
+                const popupHeight = popupRect.height || 400;
+                
+                let x = event.clientX;
+                let y = event.clientY;
+                
+                // Adjust horizontal position
+                if (x + popupWidth > window.innerWidth - 10) {
+                    x = window.innerWidth - popupWidth - 10;
+                }
+                if (x < 10) x = 10;
+                
+                // Adjust vertical position
+                if (y + popupHeight > window.innerHeight - 10) {
+                    y = window.innerHeight - popupHeight - 10;
+                }
+                if (y < 10) y = 10;
+                
                 popup.style.left = x + 'px';
                 popup.style.top = y + 'px';
             } else {
@@ -2268,15 +2277,12 @@
                 popup.style.transform = 'translate(-50%, -50%)';
             }
             
-            popup.classList.add('active');
+            popup.style.visibility = 'visible';
             renderDiagram();
         }
         
         function selectFlowPopupColor(color) {
             selectedFlowPopupColor = color;
-            document.querySelectorAll('.flow-popup-color').forEach(el => {
-                el.classList.toggle('selected', el.dataset.color === color);
-            });
         }
         
         function saveFlowPopup() {
@@ -2292,8 +2298,10 @@
         }
         
         function closeFlowPopup() {
-            document.getElementById('flow-popup').classList.remove('active');
-            document.getElementById('flow-popup').style.transform = '';
+            const popup = document.getElementById('flow-popup');
+            popup.classList.remove('active');
+            popup.style.transform = '';
+            popup.style.visibility = '';
             selectedFlowIndex = null;
             selectedFlowPopupColor = null;
             renderDiagram();
@@ -2479,29 +2487,70 @@
         // Export SVG
         function exportSVG() {
             const svg = document.getElementById('sankey-canvas');
-            const clone = svg.cloneNode(true);
-            clone.style.transform = '';
-            clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            const width = svg.getAttribute('width');
+            const height = svg.getAttribute('height');
             
-            // Add background rect
-            const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-            bgRect.setAttribute('width', '100%');
-            bgRect.setAttribute('height', '100%');
-            bgRect.setAttribute('fill', diagramData.settings.backgroundColor);
-            clone.insertBefore(bgRect, clone.firstChild);
-            
-            // Add embedded styles
+            // Create a new clean SVG
             const isDark = isColorDark(diagramData.settings.backgroundColor);
             const textColor = isDark ? '#FFFFFF' : '#353535';
-            const style = document.createElement('style');
-            style.textContent = `
-                .sankey-node text { font-family: Inter, Arial, sans-serif; font-size: 12px; font-weight: 500; fill: ${textColor}; }
-                .sankey-link { fill-opacity: 0.5; }
-            `;
-            clone.insertBefore(style, clone.firstChild);
             
-            const svgStr = new XMLSerializer().serializeToString(clone);
-            const blob = new Blob([svgStr], { type: 'image/svg+xml' });
+            let svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+  <rect width="${width}" height="${height}" fill="${diagramData.settings.backgroundColor}"/>
+`;
+            
+            // Re-calculate layout to get current positions
+            const { nodes, links, nodeWidth } = calculateLayout();
+            
+            // Draw links with inline styles
+            links.forEach(link => {
+                const flow = diagramData.flows[link.index];
+                const path = linkPath(link, nodeWidth);
+                svgContent += `  <path d="${path}" fill="${flow.color}" fill-opacity="0.5" stroke="none"/>
+`;
+            });
+            
+            // Draw flow labels if enabled
+            if (diagramData.settings.showFlowValues) {
+                links.forEach(link => {
+                    if (link.width > 8) {
+                        const x0 = link.source.x + nodeWidth;
+                        const x1 = link.target.x;
+                        const midX = (x0 + x1) / 2;
+                        const midY = (link.y0 + link.y1) / 2;
+                        svgContent += `  <text x="${midX}" y="${midY}" text-anchor="middle" dominant-baseline="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="500" fill="${textColor}">${link.value}</text>
+`;
+                    }
+                });
+            }
+            
+            // Draw nodes with inline styles
+            nodes.forEach(node => {
+                const nodeColor = getNodeColor(node.name);
+                const textX = node.depth === 0 ? node.x - 8 : node.x + nodeWidth + 8;
+                const textAnchor = node.depth === 0 ? 'end' : 'start';
+                
+                // Node rectangle
+                svgContent += `  <rect x="${node.x}" y="${node.y}" width="${nodeWidth}" height="${node.height}" fill="${nodeColor}" rx="2"/>
+`;
+                
+                // Node label
+                let labelText = node.name;
+                if (diagramData.settings.showNodeValues) {
+                    labelText += ` (${node.value})`;
+                }
+                svgContent += `  <text x="${textX}" y="${node.y + node.height / 2}" text-anchor="${textAnchor}" dominant-baseline="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="500" fill="${textColor}">${labelText}</text>
+`;
+            });
+            
+            svgContent += `</svg>`;
+            
+            const blob = new Blob([svgContent], { type: 'image/svg+xml' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
